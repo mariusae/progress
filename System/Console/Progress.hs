@@ -30,29 +30,35 @@ update howmany (Progress count total time width) =
 
 projectTimeLeft :: (Integral a) => UTCTime -> Progress a -> Maybe a
 projectTimeLeft when (Progress count total time _) =
-  if rate > 0
-     then Just $ floor $ (toRational left) / rate
-     else Nothing
+  maybe Nothing (\r -> Just $ floor $ (toRational left) / r) rate
   where
     left     = total - count
-    rate     = (toRational count) / diffSecs
     diffSecs = toRational $ diffUTCTime when time
+    rate'    = if diffSecs > 0 
+                 then Just $ (toRational count) / diffSecs
+                 else Nothing
+    rate     = maybe 
+                 Nothing 
+                 (\r -> if r > 0 then (Just r) else Nothing) 
+                 rate'
 
 pctDone :: (Integral a) => Progress a -> a
-pctDone (Progress count total _ _) = (100 * count) `div` total
+pctDone (Progress count total _ _)
+  | total == 0 = 0
+  | otherwise  = (100 * count) `div` total
 
 drawProgressBar :: (PrintfArg a, Integral a) => 
                    UTCTime 
                 -> Progress a 
                 -> (Progress a, String)
 drawProgressBar when p@(Progress count total time width) =
-  (Progress count total time (max width (length str)), str)
+  (Progress count total time width', str)
   where
-    width' = (max width (length str))
 
-    str = (printf "%s done, remaining: %s" pct left) ++ padding
-
-    padding = replicate (width' - (length str)) ' '
+    erase   = replicate width ' ' ++ replicate width '\x08'
+    str'    = printf "%s done, remaining: %s" pct left
+    width'  = length str'
+    str     = erase ++ str'
 
     pct :: String
     pct = printf "%02d%%" $ pctDone p
